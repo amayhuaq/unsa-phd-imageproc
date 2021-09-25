@@ -56,7 +56,7 @@ void compute_histogram_1d(unsigned char* img_data, int img_h, int img_w, int *hi
     //return histogram;
 }
 
-__global__ void histogram_atomic_3d(int* d_hist, int* d_img_r, int* d_img_g, int* d_img_b)
+__global__ void histogram_atomic_3d(int* d_hist, unsigned char* d_img_r, unsigned char* d_img_g, unsigned char* d_img_b)
 {
     const int NUM_BINS_3D = 32;
     int tid = threadIdx.x + blockDim.x * blockIdx.x;
@@ -72,7 +72,7 @@ __global__ void histogram_atomic_3d(int* d_hist, int* d_img_r, int* d_img_g, int
     }
 }
 
-int* compute_histogram_3d(int* img_data_r, int* img_data_g, int* img_data_b, int img_h, int img_w)
+int* compute_histogram_3d(unsigned char* img_data_r, unsigned char* img_data_g, unsigned char* img_data_b, int img_h, int img_w)
 {
     const int NUM_BIN_3D = 512; // 8 * 8 * 8
     SIZE = img_h * img_w;
@@ -82,20 +82,20 @@ int* compute_histogram_3d(int* img_data_r, int* img_data_g, int* img_data_b, int
     static int histogram[NUM_BIN_3D] = { 0 };
 
     // declare GPU memory pointers
-    int* d_img_r, *d_img_g, *d_img_b;
+    unsigned char* d_img_r, *d_img_g, *d_img_b;
     int* d_hist;
 
     // allocate GPU memory
-    cudaMalloc((void**)&d_img_r, SIZE * sizeof(int));
-    cudaMalloc((void**)&d_img_g, SIZE * sizeof(int));
-    cudaMalloc((void**)&d_img_b, SIZE * sizeof(int));
+    cudaMalloc((void**)&d_img_r, SIZE);
+    cudaMalloc((void**)&d_img_g, SIZE);
+    cudaMalloc((void**)&d_img_b, SIZE);
     cudaMalloc((void**)&d_hist, NUM_BIN_3D * sizeof(int));
 
     // transfer the arrays to the GPU
-    cudaMemcpy(d_img_r, img_data_r, SIZE * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_g, img_data_g, SIZE * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_b, img_data_b, SIZE * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_hist, histogram, NUM_BIN_3D * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_img_r, img_data_r, SIZE, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_img_g, img_data_g, SIZE, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_img_b, img_data_b, SIZE, cudaMemcpyHostToDevice);
+    //cudaMemcpy(d_hist, histogram, NUM_BIN_3D * sizeof(int), cudaMemcpyHostToDevice);
 
     //launch the kernel
     histogram_atomic_3d << <((SIZE + NUM_BIN_3D - 1) / NUM_BIN_3D), NUM_BIN_3D >> > (d_hist, d_img_r, d_img_g, d_img_b);
