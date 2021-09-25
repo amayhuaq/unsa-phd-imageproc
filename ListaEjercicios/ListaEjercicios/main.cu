@@ -76,8 +76,6 @@ void ejercicio_02(String image_name, int color)
             img_eq_chs.push_back(bgr_channels[0].clone());
             img_eq_chs.push_back(bgr_channels[1].clone());
             img_eq_chs.push_back(bgr_channels[2].clone());
-
-            cout << bgr_channels[0].channels() << " - " << bgr_channels[1].channels() << " - " << bgr_channels[2].channels() << endl;
             
             equalize(bgr_channels[0].data, img.rows, img.cols, img_eq_chs[0].channels(), img_eq_chs[0].data);
             equalize(bgr_channels[1].data, img.rows, img.cols, img_eq_chs[1].channels(), img_eq_chs[1].data);
@@ -251,10 +249,10 @@ int main()
                 cout << "Color: 0 Gray, 1 Color: "; cin >> color;
                 ejercicio_05(img_name, color);
                 break;
-            case 6:
-                cout << "Image name: "; cin >> img_name;
-                ejercicio_06(img_name);
-                break;
+            //case 6:
+            //    cout << "Image name: "; cin >> img_name;
+            //    ejercicio_06(img_name);
+            //    break;
             default:
                 return -1;
         }

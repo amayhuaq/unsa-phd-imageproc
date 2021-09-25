@@ -45,7 +45,6 @@ void apply_function(unsigned char* img_data, int img_h, int img_w, int n_channel
 
     // transfer the arrays to the GPU
     cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_res, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
 
     //launch the kernel
     dim3 grid_img(img_w, img_h);
@@ -124,7 +123,6 @@ void apply_aritmethic_operation(unsigned char* img1, unsigned char* img2, int im
     // transfer the arrays to the GPU
     cudaMemcpy(d_img1, img1, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
     cudaMemcpy(d_img2, img2, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_res, img1, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
 
     //launch the kernel
     dim3 grid_img(img_w, img_h);
@@ -159,7 +157,6 @@ void apply_aritmethic_operation(unsigned char* img1, unsigned char* img2, int im
 
 __global__ void convolution_media_gpu(unsigned char* d_img, int img_h, int img_w, int win_size, unsigned char* d_img_res)
 {
-    // Row and colum for the thread
     int py = blockIdx.y * blockDim.y + threadIdx.y;
     int px = blockIdx.x * blockDim.x + threadIdx.x;
     int sum = 0;
@@ -188,7 +185,6 @@ void apply_media_convolution(unsigned char* img_data, int img_h, int img_w, int 
     
     // transfer the arrays to the GPU
     cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_res, img_res, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
     
     //launch the kernel
     dim3 dim_block(TILE_SIZE, TILE_SIZE);
@@ -205,7 +201,6 @@ void apply_media_convolution(unsigned char* img_data, int img_h, int img_w, int 
 
 __global__ void convolution_sobel_gpu(unsigned char* d_img, int img_h, int img_w, unsigned char* d_img_res)
 {
-    // Row and colum for the thread
     int py = blockIdx.y * blockDim.y + threadIdx.y;
     int px = blockIdx.x * blockDim.x + threadIdx.x;
     int padd = 1;
@@ -259,9 +254,17 @@ __device__ unsigned char compute_bilinear_val(unsigned char* d_img, int pos)
 
 }
 
-__constant__ unsigned char* img_base;
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort = true)
+{
+    if (code != cudaSuccess)
+    {
+        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+        if (abort) exit(code);
+    }
+}
 
-//__global__ void bilinear_interpolation_gpu(unsigned char* d_img, int img_h, int img_w, int n_channels, int zoom, unsigned char* d_img_res)
+
 __global__ void bilinear_interpolation_gpu(unsigned char* d_img, int img_h, int img_w, int n_channels, int zoom, unsigned char* d_img_res)
 {
     // Row and colum for the thread
@@ -269,9 +272,8 @@ __global__ void bilinear_interpolation_gpu(unsigned char* d_img, int img_h, int 
     int px = blockIdx.x * blockDim.x + threadIdx.x;
     //int px = blockIdx.x;
     //int py = blockIdx.y;
-    int pos = (px + py * gridDim.x);
+    //int pos = (px + py * gridDim.x);
 
-    int sum = 0;
     int padd = 1;
     int new_img_h = img_h * zoom;
     int new_img_w = img_w * zoom;
@@ -283,12 +285,13 @@ __global__ void bilinear_interpolation_gpu(unsigned char* d_img, int img_h, int 
         int r = s + 1;
         int a = px - i;
         int b = py - s;
-        //int pos = (py * new_img_w);// +px);
-        //d_img_res[py * img_w * zoom + px] = (1 - a) * (1 - b) * d_img[s * img_w + i] + 
+        int pos = (py * (gridDim.x * blockDim.x) +px);
+        //int pos = (py * new_img_w +px);
+        //d_img_res[pos] = (1 - a) * (1 - b) * d_img[s * img_w + i] + 
         //    a * (1 - b) * d_img[s * img_w + d] + (1 - a) * b * d_img[r * img_w + i] + a * b * d_img[r * img_w + d];
-        d_img_res[pos] = 255; // d_img[s * img_w + i]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
-        //d_img_res[pos + 1] = 255; // d_img[s * img_w + i]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
-        d_img_res[450 * new_img_w + px] = 255; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
+        d_img_res[pos] = d_img[i + s * img_w]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
+        //d_img_res[pos+1] = d_img[i + s * img_w]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
+        //d_img_res[pos+2] = d_img[i + s * img_w]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
     //}
 }
 
@@ -307,14 +310,15 @@ void apply_bilinear_interpolation(unsigned char* img_data, int img_h, int img_w,
 
     // transfer the arrays to the GPU
     cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-    //cudaMemcpy(d_img_res, img_res, img_h * img_w * zoom * n_channels, cudaMemcpyHostToDevice);
 
     //launch the kernel MatAdd<<<numBlocks, threadsPerBlock>>>(A, B, C);
-    //dim3 dim_block(TILE_SIZE, TILE_SIZE);
-    dim3 grid_img(img_w * zoom, img_h * zoom);
-    //dim3 grid_img((int)ceil(img_w * zoom / TILE_SIZE), (int)ceil(img_h * zoom / TILE_SIZE));
-    //bilinear_interpolation_gpu <<< grid_img, dim_block >>> (d_img, img_h, img_w, n_channels, zoom, d_img_res);
-    bilinear_interpolation_gpu <<< grid_img, 1 >>> (d_img, img_h, img_w, n_channels, zoom, d_img_res);
+    dim3 dim_block(TILE_SIZE, TILE_SIZE);
+    dim3 grid_img((int)ceil(img_w * zoom / TILE_SIZE), (int)ceil(img_h * zoom / TILE_SIZE));
+    bilinear_interpolation_gpu <<< grid_img, dim_block >>> (d_img, img_h, img_w, n_channels, zoom, d_img_res);
+    //bilinear_interpolation_gpu <<< grid_img, 1 >>> (d_img, img_h, img_w, n_channels, zoom, d_img_res);
+
+    gpuErrchk(cudaPeekAtLastError());
+    gpuErrchk(cudaDeviceSynchronize());
 
     // copy back from GPU
     cudaMemcpy(img_res, d_img_res, img_h * img_w * zoom * n_channels, cudaMemcpyDeviceToHost);

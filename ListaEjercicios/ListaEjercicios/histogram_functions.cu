@@ -29,7 +29,6 @@ __global__ void histogram_atomic_1d(int* d_hist, unsigned char* d_img)
 void compute_histogram_1d(unsigned char* img_data, int img_h, int img_w, int *histogram)
 {
     SIZE = img_h * img_w;
-    //static int histogram[NUM_BIN] = { 0 };
 
     // declare GPU memory pointers
     unsigned char* d_img;
@@ -41,7 +40,6 @@ void compute_histogram_1d(unsigned char* img_data, int img_h, int img_w, int *hi
 
     // transfer the arrays to the GPU
     cudaMemcpy(d_img, img_data, SIZE, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_hist, histogram, NUM_BIN * sizeof(int), cudaMemcpyHostToDevice);
 
     //launch the kernel
     histogram_atomic_1d <<< ((SIZE + NUM_BIN - 1) / NUM_BIN), NUM_BIN >>> (d_hist, d_img);
@@ -52,8 +50,6 @@ void compute_histogram_1d(unsigned char* img_data, int img_h, int img_w, int *hi
     // free GPU memory allocation
     cudaFree(d_img);
     cudaFree(d_hist);
-
-    //return histogram;
 }
 
 __global__ void histogram_atomic_3d(int* d_hist, unsigned char* d_img_r, unsigned char* d_img_g, unsigned char* d_img_b)
@@ -95,7 +91,6 @@ int* compute_histogram_3d(unsigned char* img_data_r, unsigned char* img_data_g, 
     cudaMemcpy(d_img_r, img_data_r, SIZE, cudaMemcpyHostToDevice);
     cudaMemcpy(d_img_g, img_data_g, SIZE, cudaMemcpyHostToDevice);
     cudaMemcpy(d_img_b, img_data_b, SIZE, cudaMemcpyHostToDevice);
-    //cudaMemcpy(d_hist, histogram, NUM_BIN_3D * sizeof(int), cudaMemcpyHostToDevice);
 
     //launch the kernel
     histogram_atomic_3d << <((SIZE + NUM_BIN_3D - 1) / NUM_BIN_3D), NUM_BIN_3D >> > (d_hist, d_img_r, d_img_g, d_img_b);
@@ -136,7 +131,6 @@ __global__ void stretching_gpu(unsigned char* d_img, unsigned char* d_img_eq, in
     int x = blockIdx.x;
     int y = blockIdx.y;
     int pos = x + y * gridDim.x;
-    //if (pos < SIZE)
     d_img_eq[pos] = (d_img[pos] - HIST_m) * 255 / (HIST_M - HIST_m);
 }
 
@@ -164,7 +158,6 @@ void stretch(unsigned char* img_data, int img_h, int img_w, int n_channels, unsi
 
     // transfer the arrays to the GPU
     cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_eq, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
 
     //launch the kernel
     dim3 grid_img(img_w, img_h);
@@ -194,7 +187,6 @@ void compute_equalization_func(int* histogram, int NP, int* hist_f)
     {
         acum += histogram[i];
         hist_f[i] = (acum * 1.0 / NP) * 255;
-        cout << acum << " / " << NP << " = " << hist_f[i] << endl;
     }
 }
 
@@ -204,10 +196,6 @@ void equalize(unsigned char* img_data, int img_h, int img_w, int n_channels, uns
     int hist_f[NUM_BIN] = { 0 };
     compute_histogram_1d(img_data, img_h, img_w, hist);
     compute_equalization_func(hist, img_h * img_w, hist_f);
-
-    for (int i = 0; i < NUM_BIN; i++) {
-        printf("bin %d : hist %d : f %d \n", i, hist[i], hist_f[i]);
-    }
     
     // declare GPU memory pointers
     unsigned char* d_img = NULL;
@@ -221,7 +209,6 @@ void equalize(unsigned char* img_data, int img_h, int img_w, int n_channels, uns
 
     // transfer the arrays to the GPU
     cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_img_res, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
     cudaMemcpy(d_func, hist_f, NUM_BIN * sizeof(int), cudaMemcpyHostToDevice);
 
     //launch the kernel
