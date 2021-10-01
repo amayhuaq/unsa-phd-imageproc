@@ -249,81 +249,58 @@ void apply_sobel_convolution(unsigned char* img_data, int img_h, int img_w, int 
     cudaFree(d_img);
 }
 
-__device__ unsigned char compute_bilinear_val(unsigned char* d_img, int pos)
-{
+/**************** BILINEAR INTERPOLATION **********************/
+texture<unsigned char, cudaTextureType2D, cudaReadModeElementType> texRef;
 
-}
-
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort = true)
+__global__ void bilinear_interpolation_gpu(int img_h, int img_w, int zoom, unsigned char* d_img_res)
 {
-    if (code != cudaSuccess)
-    {
-        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-        if (abort) exit(code);
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+
+    float f01 = tex2D(texRef, col, row);
+    float f11 = tex2D(texRef, col + 1, row);
+    float f00 = tex2D(texRef, col, row + 1);
+    float f10 = tex2D(texRef, col + 1, row + 1);
+
+    if (col < img_w && row < img_h) {
+        float a, b;
+        for (int i = 0; i < zoom; i++) {
+            for (int j = 0; j < zoom; j++) {
+                a = j * 1.0 / zoom;
+                b = i * 1.0 / zoom;
+                d_img_res[row * img_w * zoom * zoom + col * zoom + i * img_w * zoom + j] = (1 - a) * (1 - b) * f01 + a * (1 - b) * f11 + (1 - a) * b * f00 + a * b * f10;
+            }
+        }
     }
 }
 
-
-__global__ void bilinear_interpolation_gpu(unsigned char* d_img, int img_h, int img_w, int n_channels, int zoom, unsigned char* d_img_res)
+void apply_bilinear_interpolation(unsigned char* img_data, int img_h, int img_w, int zoom, unsigned char* img_res)
 {
-    // Row and colum for the thread
-    int py = blockIdx.y * blockDim.y + threadIdx.y;
-    int px = blockIdx.x * blockDim.x + threadIdx.x;
-    //int px = blockIdx.x;
-    //int py = blockIdx.y;
-    //int pos = (px + py * gridDim.x);
-
-    int padd = 1;
-    int new_img_h = img_h * zoom;
-    int new_img_w = img_w * zoom;
-    //if (!((py < padd) || (px < padd) || (py >= new_img_h - padd) || (px >= new_img_w - padd)))
-    //{
-        int i = px / zoom;
-        int d = i + 1;
-        int s = py / zoom;
-        int r = s + 1;
-        int a = px - i;
-        int b = py - s;
-        int pos = (py * (gridDim.x * blockDim.x) +px);
-        //int pos = (py * new_img_w +px);
-        //d_img_res[pos] = (1 - a) * (1 - b) * d_img[s * img_w + i] + 
-        //    a * (1 - b) * d_img[s * img_w + d] + (1 - a) * b * d_img[r * img_w + i] + a * b * d_img[r * img_w + d];
-        d_img_res[pos] = d_img[i + s * img_w]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
-        //d_img_res[pos+1] = d_img[i + s * img_w]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
-        //d_img_res[pos+2] = d_img[i + s * img_w]; //d_img[(int)((py / zoom) * img_w + (py / zoom))];
-    //}
-}
-
-void apply_bilinear_interpolation(unsigned char* img_data, int img_h, int img_w, int n_channels, int zoom, unsigned char* img_res)
-{
-    // declare GPU memory pointers
-    unsigned char* d_img = NULL;
     unsigned char* d_img_res = NULL;
 
-    cout << "channels: " << n_channels << endl;
-
     // allocate GPU memory
-    cudaMalloc((void**)&d_img, img_h * img_w * n_channels);
-    cudaMalloc((void**)&d_img_res, img_h * img_w * zoom * n_channels);
-    //cudaMemcpyToSymbol(img_base, &img_data, img_h * img_w);
+    cudaMalloc((void**)&d_img_res, img_h * img_w * zoom * zoom);
+    
+    // creating texture based on the original image
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(8, 0, 0, 0, cudaChannelFormatKindUnsigned);
+    cudaArray* cu_arr;
+    cudaMallocArray(&cu_arr, &channelDesc, img_w, img_h);
+    cudaMemcpyToArray(cu_arr, 0, 0, img_data, img_h * img_w, cudaMemcpyHostToDevice);
+    texRef.addressMode[0] = cudaAddressModeClamp;
+    texRef.addressMode[1] = cudaAddressModeClamp;
+    texRef.filterMode = cudaFilterModePoint;
+    cudaBindTextureToArray(texRef, cu_arr, channelDesc);
 
-    // transfer the arrays to the GPU
-    cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
-
-    //launch the kernel MatAdd<<<numBlocks, threadsPerBlock>>>(A, B, C);
-    dim3 dim_block(TILE_SIZE, TILE_SIZE);
-    dim3 grid_img((int)ceil(img_w * zoom / TILE_SIZE), (int)ceil(img_h * zoom / TILE_SIZE));
-    bilinear_interpolation_gpu <<< grid_img, dim_block >>> (d_img, img_h, img_w, n_channels, zoom, d_img_res);
-    //bilinear_interpolation_gpu <<< grid_img, 1 >>> (d_img, img_h, img_w, n_channels, zoom, d_img_res);
-
-    gpuErrchk(cudaPeekAtLastError());
-    gpuErrchk(cudaDeviceSynchronize());
-
+    dim3 threadsPerBlock(16, 16);
+    dim3 blocksPerGrid((img_w + threadsPerBlock.x - 1) / threadsPerBlock.x,
+        (img_h + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    
+    bilinear_interpolation_gpu << < blocksPerGrid, threadsPerBlock >> > (img_h, img_w, zoom, d_img_res);
+        
     // copy back from GPU
-    cudaMemcpy(img_res, d_img_res, img_h * img_w * zoom * n_channels, cudaMemcpyDeviceToHost);
+    cudaMemcpy(img_res, d_img_res, img_h * img_w * zoom * zoom, cudaMemcpyDeviceToHost);
 
     // free GPU memory allocation
     cudaFree(d_img_res);
-    cudaFree(d_img);
+    cudaFreeArray(cu_arr);
 }

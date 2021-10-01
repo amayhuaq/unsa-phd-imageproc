@@ -195,10 +195,10 @@ void ejercicio_05(String image_name, int color)
     waitKey(0);
 }
 
-void ejercicio_06(String image_name)
+void ejercicio_06(String image_name, int color)
 {
     // read image
-    Mat img = imread(image_name, 0);
+    Mat img = imread(image_name, color);
     if (!img.data) {
         cout << "The image was not found\n";
         return;
@@ -208,8 +208,23 @@ void ejercicio_06(String image_name)
     cin >> zoom;
 
     Mat img_zoom = Mat::zeros(Size(img.cols * zoom, img.rows * zoom), img.type());
-    apply_bilinear_interpolation(img.data, img.rows, img.cols, img.channels(), zoom, img_zoom.data);
-    
+    switch (color)
+    {
+        case 0:
+            apply_bilinear_interpolation(img.data, img.rows, img.cols, zoom, img_zoom.data);
+            break;
+        case 1:
+            Mat bgr_channels[3];
+            vector<Mat> img_chs(3);
+            split(img, bgr_channels);
+            split(img_zoom, img_chs);
+            apply_bilinear_interpolation(bgr_channels[0].data, img.rows, img.cols, zoom, img_chs[0].data);
+            apply_bilinear_interpolation(bgr_channels[1].data, img.rows, img.cols, zoom, img_chs[1].data);
+            apply_bilinear_interpolation(bgr_channels[2].data, img.rows, img.cols, zoom, img_chs[2].data);
+            merge(img_chs, img_zoom);
+            break;
+    }
+
     imshow("Input image", img);
     imshow("Output image", img_zoom);
 
@@ -249,10 +264,11 @@ int main()
                 cout << "Color: 0 Gray, 1 Color: "; cin >> color;
                 ejercicio_05(img_name, color);
                 break;
-            //case 6:
-            //    cout << "Image name: "; cin >> img_name;
-            //    ejercicio_06(img_name);
-            //    break;
+            case 6:
+                cout << "Image name: "; cin >> img_name;
+                cout << "Color: 0 Gray, 1 Color: "; cin >> color;
+                ejercicio_06(img_name, color);
+                break;
             default:
                 return -1;
         }
