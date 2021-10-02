@@ -231,6 +231,33 @@ void ejercicio_06(String image_name, int color)
     waitKey(0);
 }
 
+void ejercicio_07(String image_name, int color)
+{
+    // read image
+    Mat img = imread(image_name, color);
+    if (!img.data) {
+        cout << "The image was not found\n";
+        return;
+    }
+    int pts[8];
+    for (int i = 0; i < 7; i+=2) {
+        cout << "P" << (i / 2) + 1 << ":\n";
+        cout << " x: ";
+        cin >> pts[i];
+        cout << " y: ";
+        cin >> pts[i + 1];
+    }
+
+    Mat img_res(Size(img.cols, img.rows), img.type(), Scalar(255, 255, 255));
+    imshow("Output1", img_res);
+    apply_bilinear_transformation(img.data, img.rows, img.cols, img.channels(), pts, img_res.data);
+
+    imshow("Input image", img);
+    imshow("Output image", img_res);
+
+    waitKey(0);
+}
+
 int main()
 {
     int n_ex, color;
@@ -268,6 +295,11 @@ int main()
                 cout << "Image name: "; cin >> img_name;
                 cout << "Color: 0 Gray, 1 Color: "; cin >> color;
                 ejercicio_06(img_name, color);
+                break;
+            case 7:
+                cout << "Image name: "; cin >> img_name;
+                cout << "Color: 0 Gray, 1 Color: "; cin >> color;
+                ejercicio_07(img_name, color);
                 break;
             default:
                 return -1;

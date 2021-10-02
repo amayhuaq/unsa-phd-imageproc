@@ -304,3 +304,135 @@ void apply_bilinear_interpolation(unsigned char* img_data, int img_h, int img_w,
     cudaFree(d_img_res);
     cudaFreeArray(cu_arr);
 }
+
+
+#define NUM_VARS 8
+/*
+M-->matriz aumentada
+n-->numero de ecuaciones
+*/
+void gauss_jordan(double M[NUM_VARS][NUM_VARS + 1], int n) 
+{
+    double may;//variable para almacenar el mayor de la columna k
+    int ind;//indice del mayor-->indice de may
+    double aux;
+    double pivote;
+
+    for (int k = 0; k < n; k++) {//recorrer columnas de la matriz reducida
+        may = abs(M[k][k]);
+        ind = k;
+        //recorrer filas de la columna k para buscar el indice del mayor
+        for (int l = k + 1; l < n; l++) {
+            if (may < abs(M[l][k])) {
+                may = abs(M[l][k]);
+                ind = l;
+            }
+
+        }
+
+        //cambiar filas
+        if (k != ind) {
+            for (int i = 0; i < n + 1; i++) {
+                aux = M[k][i];
+                M[k][i] = M[ind][i];
+                M[ind][i] = aux;
+            }
+
+        }
+        if (M[k][k] == 0) {
+            cout << "no tiene solucion";
+            break;
+        }
+        else {
+
+            for (int i = 0; i < n; i++) {//recorrer fila
+                if (i != k) {
+                    pivote = -M[i][k];
+                    for (int j = k; j < n + 1; j++) {//recorrer elementos de una fila
+
+                        M[i][j] = M[i][j] + pivote * M[k][j] / M[k][k];
+                    }
+                }
+                else {
+                    pivote = M[k][k];
+                    for (int j = k; j < n + 1; j++) {
+                        M[i][j] = M[i][j] / pivote;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void compute_coefficients(int img_h, int img_w, int* pts, double *coeffs) 
+{
+    int x1a = 0, y1a = 0, x2a = img_w - 1, y2a = 0;
+    int x4a = 0, y4a = img_h - 1, x3a = img_w - 1, y3a = img_h - 1;
+    double M[NUM_VARS][NUM_VARS + 1] = {
+        {x1a, y1a, x1a * y1a,1,0,0,0,0,pts[0]},
+        {0,0,0,0,x1a, y1a, x1a * y1a,1,pts[1]},
+        {x2a, y2a, x2a * y2a,1,0,0,0,0,pts[2]},
+        {0,0,0,0,x2a, y2a, x2a * y2a,1,pts[3]},
+        {x3a, y3a, x3a * y3a,1,0,0,0,0,pts[4]},
+        {0,0,0,0,x3a, y3a, x3a * y3a,1,pts[5]},
+        {x4a, y4a, x4a * y4a,1,0,0,0,0,pts[6]},
+        {0,0,0,0,x4a, y4a, x4a * y4a,1,pts[7]}
+    };
+    gauss_jordan(M, NUM_VARS);
+    // save solution
+    for (int i = 0; i < NUM_VARS; i++) {
+        coeffs[i] = M[i][NUM_VARS];
+    }
+}
+
+__global__ void bilinear_transformation_gpu(unsigned char* d_img, int img_h, int img_w, int n_channels, double *d_coeffs, unsigned char* d_img_res)
+{
+    int px = blockIdx.x;
+    int py = blockIdx.y;
+    int new_px = (int)(d_coeffs[0] * px + d_coeffs[1] * py + d_coeffs[2] * px * py + d_coeffs[3]);
+    int new_py = (int)(d_coeffs[4] * px + d_coeffs[5] * py + d_coeffs[6] * px * py + d_coeffs[7]);
+    
+    if(px < img_w && py < img_h && new_px < img_w && new_py < img_h) {
+        int pos = (px + py * gridDim.x) * n_channels;
+        int new_pos = (new_px + new_py * gridDim.x) * n_channels;
+        d_img_res[new_pos] = d_img[pos];
+        if (n_channels == 3) {
+            d_img_res[new_pos + 1] = d_img[pos + 1];
+            d_img_res[new_pos + 2] = d_img[pos + 2];
+        }
+    }
+}
+
+void apply_bilinear_transformation(unsigned char* img_data, int img_h, int img_w, int n_channels, int *pts, unsigned char* img_res)
+{
+    double coeffs[NUM_VARS];
+    compute_coefficients(img_h, img_w, pts, coeffs);
+    for (int i = 0; i < NUM_VARS; i++)
+        cout << coeffs[i] << endl;
+
+    // declare GPU memory pointers
+    unsigned char* d_img = NULL;
+    double* d_coeffs = NULL;
+    unsigned char* d_img_res = NULL;
+
+    // allocate GPU memory
+    cudaMalloc((void**)&d_img, img_h * img_w * n_channels);
+    cudaMalloc((void**)&d_coeffs, NUM_VARS * sizeof(double));
+    cudaMalloc((void**)&d_img_res, img_h * img_w * n_channels);
+
+    // transfer the arrays to the GPU
+    cudaMemcpy(d_img, img_data, img_h * img_w * n_channels, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_coeffs, coeffs, NUM_VARS * sizeof(double), cudaMemcpyHostToDevice);
+
+    //launch the kernel
+    dim3 grid_img(img_w, img_h);
+    bilinear_transformation_gpu << < grid_img, 1 >> > (d_img, img_h, img_w, n_channels, d_coeffs, d_img_res);
+
+    // copy back from GPU
+    cudaMemcpy(img_res, d_img_res, img_h * img_w * n_channels, cudaMemcpyDeviceToHost);
+
+    // free GPU memory allocation
+    cudaFree(d_img_res);
+    cudaFree(d_coeffs);
+    cudaFree(d_img);
+}

@@ -5,3 +5,4 @@ void apply_media_convolution(unsigned char* img_data, int img_h, int img_w, int 
 void apply_sobel_convolution(unsigned char* img_data, int img_h, int img_w, int n_channels, unsigned char* img_res);
 
 void apply_bilinear_interpolation(unsigned char* img_data, int img_h, int img_w, int zoom, unsigned char* img_res);
+void apply_bilinear_transformation(unsigned char* img_data, int img_h, int img_w, int n_channels, int *pts, unsigned char* img_res);
