@@ -233,7 +233,6 @@ void ejercicio_06(String image_name, int color)
 
 void ejercicio_07(String image_name, int color)
 {
-    // read image
     Mat img = imread(image_name, color);
     if (!img.data) {
         cout << "The image was not found\n";
@@ -249,7 +248,6 @@ void ejercicio_07(String image_name, int color)
     }
 
     Mat img_res(Size(img.cols, img.rows), img.type(), Scalar(255, 255, 255));
-    imshow("Output1", img_res);
     apply_bilinear_transformation(img.data, img.rows, img.cols, img.channels(), pts, img_res.data);
 
     imshow("Input image", img);

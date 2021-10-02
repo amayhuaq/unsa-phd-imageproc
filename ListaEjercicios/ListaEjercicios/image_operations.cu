@@ -307,49 +307,40 @@ void apply_bilinear_interpolation(unsigned char* img_data, int img_h, int img_w,
 
 
 #define NUM_VARS 8
-/*
-M-->matriz aumentada
-n-->numero de ecuaciones
-*/
+
 void gauss_jordan(double M[NUM_VARS][NUM_VARS + 1], int n) 
 {
-    double may;//variable para almacenar el mayor de la columna k
-    int ind;//indice del mayor-->indice de may
+    double may;
+    int ind;
     double aux;
     double pivote;
 
-    for (int k = 0; k < n; k++) {//recorrer columnas de la matriz reducida
+    for (int k = 0; k < n; k++) {
         may = abs(M[k][k]);
         ind = k;
-        //recorrer filas de la columna k para buscar el indice del mayor
         for (int l = k + 1; l < n; l++) {
             if (may < abs(M[l][k])) {
                 may = abs(M[l][k]);
                 ind = l;
             }
-
         }
-
-        //cambiar filas
+        // change rows
         if (k != ind) {
             for (int i = 0; i < n + 1; i++) {
                 aux = M[k][i];
                 M[k][i] = M[ind][i];
                 M[ind][i] = aux;
             }
-
         }
         if (M[k][k] == 0) {
-            cout << "no tiene solucion";
+            cout << "There is not a solution";
             break;
         }
         else {
-
-            for (int i = 0; i < n; i++) {//recorrer fila
+            for (int i = 0; i < n; i++) {
                 if (i != k) {
                     pivote = -M[i][k];
-                    for (int j = k; j < n + 1; j++) {//recorrer elementos de una fila
-
+                    for (int j = k; j < n + 1; j++) {
                         M[i][j] = M[i][j] + pivote * M[k][j] / M[k][k];
                     }
                 }
